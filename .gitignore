@@ -1,0 +1,15 @@
+prefetcher/l1i_prefetcher.cc
+prefetcher/l1d_prefetcher.cc
+prefetcher/l2c_prefetcher.cc
+prefetcher/llc_prefetcher.cc
+branch/branch_predictor.cc
+replacement/llc_replacement.cc
+
+bin/
+obj/
+dpc3_traces/
+info/
+results*/*
+
+spec/benchspec/
+spec/bin/
