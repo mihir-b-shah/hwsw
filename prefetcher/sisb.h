@@ -61,13 +61,18 @@ void sisb_prefetcher_operate(uint64_t addr, uint64_t pc, uint8_t cache_hit, uint
     /* training */
     if (tu.find(pc) != tu.end()) {
         uint64_t last_addr = tu[pc];
-        if (cache.find(last_addr) != cache.end() && cache[last_addr] != addr_B) {
+
+        bool divergent = cache.find(last_addr) != cache.end() && cache[last_addr] != addr_B;
+        bool convergent = cache.find(last_addr) != cache.end() && cache[last_addr] == addr_B;
+
+        code_informer::get_instance()->accept_query(CALL_STACK, instr_id, {context[last_addr]},
+          [pc, divergent, convergent](std::vector<void*>& results){
+            std::fprintf(stderr, "EVENT: %s PC: %" PRIxPTR " BEFCTXT: %s AFTCTXT: %s\n",
+              divergent ? "divrg" : convergent ? "convg" : "fresh", pc, static_cast<char*>(results[1]), 
+              static_cast<char*>(results[0]));
+          });
+        if (divergent) {
             divergence++;
-            code_informer::get_instance()->accept_query(CALL_STACK, instr_id, {context[last_addr]},
-              [pc](std::vector<void*>& results){
-                std::fprintf(stderr, "PC: %" PRIxPTR " before_func:%s after_func:%s\n",
-                  pc, static_cast<char*>(results[0]), static_cast<char*>(results[1]));
-              });
         }
         cache[last_addr] = addr_B;
         context[last_addr] = instr_id;
