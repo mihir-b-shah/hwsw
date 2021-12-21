@@ -1,6 +1,7 @@
 
 #include "cache.h"
-#include "code_info.h"
+#include "code_informer.h"
+#include "call_stack.h"
 
 #include <unordered_map>
 
@@ -65,11 +66,12 @@ void sisb_prefetcher_operate(uint64_t addr, uint64_t pc, uint8_t cache_hit, uint
         bool divergent = cache.find(last_addr) != cache.end() && cache[last_addr] != addr_B;
         bool convergent = cache.find(last_addr) != cache.end() && cache[last_addr] == addr_B;
 
-        code_informer::get_instance()->accept_query(CALL_STACK, instr_id, {context[last_addr]},
-          [pc, divergent, convergent](std::vector<void*>& results){
-            std::fprintf(stderr, "EVENT: %s PC: %" PRIxPTR " BEFCTXT: %s AFTCTXT: %s\n",
-              divergent ? "divrg" : convergent ? "convg" : "fresh", pc, static_cast<char*>(results[1]), 
-              static_cast<char*>(results[0]));
+        code_informer<call_stack>::get_instance()->accept_query(instr_id, 
+          {context[last_addr]}, [pc, divergent, convergent](const std::vector<call_stack>& results){
+            std::cerr << "EVENT: " << (divergent ? "divrg" : convergent ? "convg" : "fresh")
+                      << "PC: " << pc
+                      << "BEFCTXT: " << results[1].caller
+                      << "AFTCTXT: " << results[0].caller << '\n';
           });
         if (divergent) {
             divergence++;

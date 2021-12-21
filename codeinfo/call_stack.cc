@@ -1,7 +1,7 @@
 
 #include "call_stack.h"
 
-int32_t call_stack::funcmap_context(uintptr_t ip){
+int32_t call_stack_impl::funcmap_context(uintptr_t ip){
   sym_ref key(nullptr, ip);
   auto iter = std::upper_bound(func_starts.begin(), func_starts.end(), key);
   if(iter == func_starts.end()){
@@ -12,15 +12,14 @@ int32_t call_stack::funcmap_context(uintptr_t ip){
   }
 }
 
-void call_stack::init_instr_set(std::unordered_set<uintptr_t>& instrs, FILE* f){
+void call_stack_impl::init_instr_set(std::unordered_set<uintptr_t>& instrs, FILE* f){
   uintptr_t addr;
   while(fscanf(f, "%" PRIxPTR "\n", &addr) > 0){
     instrs.insert(addr);
   }
 }
 
-// impl
-call_stack::call_stack() : prev_call(false), prev_ret(false), prev_area(false) {
+call_stack_impl::call_stack_impl() : prev_call(false), prev_ret(false), prev_area(false) {
   using namespace std;
 
   string trace_name = get_trace_name();
@@ -56,7 +55,7 @@ call_stack::call_stack() : prev_call(false), prev_ret(false), prev_area(false) {
   fclose(frets);
 }
   
-void* call_stack::update_inner(ooo_model_instr* instr){
+void call_stack_impl::update_state(ooo_model_instr* instr){
   uintptr_t ip = instr->ip - vaddr_offset();
   int32_t fid = funcmap_context(ip);
 
@@ -125,11 +124,5 @@ void* call_stack::update_inner(ooo_model_instr* instr){
   prev_ret = ret_instrs.find(ip) != ret_instrs.end();
   assert(!prev_call || !prev_ret);
   prev_area = fid != -1;
-
-  if(call_stk.size() <= 1){
-    return nullptr;
-  } else {
-    return const_cast<char*>(func_starts[call_stk[call_stk.size()-2]].name.c_str());
-  }
 }
   
