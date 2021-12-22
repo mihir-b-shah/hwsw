@@ -5,7 +5,6 @@
 
 #include <unordered_map>
 #include <utility>
-#include <functional>
 
 using namespace std;
 
@@ -14,16 +13,9 @@ using namespace std;
 // training unit (maps pc to last address)
 unordered_map<uint64_t, uint64_t> tu;
 
-struct pair_hash {
-  template<typename T1, typename T2>
-  size_t operator()(const pair<T1,T2>& p) const {
-    return std::hash<T1>{}(p.first) ^ std::hash<T2>{}(p.second);
-  }
-};
-
-/* true pc-localization */
-unordered_map<pair<uint64_t, uint64_t>, uint64_t, pair_hash> cache;
-unordered_map<pair<uint64_t, uint64_t>, uint64_t, pair_hash> context;
+// mapping cache (maps address to next address)
+unordered_map<uint64_t, uint64_t> cache;
+unordered_map<uint64_t, uint64_t> context; // instr_ids for cache update
 
 /* performance metadata */
 unordered_map<uint64_t, uint64_t> outstanding;
@@ -35,9 +27,8 @@ uint64_t divergence = 0;
 
 /* get most specific prediction possible */
 uint64_t get_prediction(uint64_t pc, uint64_t addr) {
-    auto iter = cache.find(make_pair(pc,addr));
-    if (iter != cache.end()) {
-        return iter->second;
+    if (cache.find(addr) != cache.end()) {
+        return cache[addr];
     } else {
         return 0;
     }
@@ -73,14 +64,11 @@ void sisb_prefetcher_operate(uint64_t addr, uint64_t pc, uint8_t cache_hit, uint
     if (tu.find(pc) != tu.end()) {
         uint64_t last_addr = tu[pc];
 
-        auto cache_idx = make_pair(pc, last_addr);
-        auto cache_iter = cache.find(cache_idx);
-
-        bool divergent = cache_iter != cache.end() && cache_iter->second != addr_B;
-        bool convergent = cache_iter != cache.end() && cache_iter->second == addr_B;
+        bool divergent = cache.find(last_addr) != cache.end() && cache[last_addr] != addr_B;
+        bool convergent = cache.find(last_addr) != cache.end() && cache[last_addr] == addr_B;
 
         code_informer<call_stack>::get_instance()->accept_query(instr_id, 
-          {context[cache_idx]}, [pc, divergent, convergent](const std::vector<call_stack>& results){
+          {context[last_addr]}, [pc, divergent, convergent](const std::vector<call_stack>& results){
             std::cerr << "EVENT: " << (divergent ? "divrg" : convergent ? "convg" : "fresh")
                       << " PC: " << std::hex << pc << std::dec
                       << " BEFCTXT: " << results[1]
@@ -89,8 +77,8 @@ void sisb_prefetcher_operate(uint64_t addr, uint64_t pc, uint8_t cache_hit, uint
         if (divergent) {
             divergence++;
         }
-        cache[cache_idx] = addr_B;
-        context[cache_idx] = instr_id;
+        cache[last_addr] = addr_B;
+        context[last_addr] = instr_id;
     }
     tu[pc] = addr_B;
 
