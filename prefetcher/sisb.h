@@ -69,9 +69,9 @@ void sisb_prefetcher_operate(uint64_t addr, uint64_t pc, uint8_t cache_hit, uint
         code_informer<call_stack>::get_instance()->accept_query(instr_id, 
           {context[last_addr]}, [pc, divergent, convergent](const std::vector<call_stack>& results){
             std::cerr << "EVENT: " << (divergent ? "divrg" : convergent ? "convg" : "fresh")
-                      << "PC: " << pc
-                      << "BEFCTXT: " << results[1].caller
-                      << "AFTCTXT: " << results[0].caller << '\n';
+                      << " PC: " << std::hex << pc << std::dec
+                      << " BEFCTXT: " << results[1]
+                      << " AFTCTXT: " << results[0] << '\n';
           });
         if (divergent) {
             divergence++;

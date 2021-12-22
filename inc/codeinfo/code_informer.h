@@ -13,7 +13,7 @@ class code_informer {
 public:
   struct query {
     uint64_t trigger;
-    std::initializer_list<uint64_t> iids; 
+    std::vector<uint64_t> iids; 
 
     query(uint64_t trigger, std::initializer_list<uint64_t> iids) 
       : trigger(trigger), iids(iids) {}
@@ -48,6 +48,7 @@ public:
     
     auto& iids = q->iids;
     results.resize(1+iids.size());
+    
     results[0] = info.query_past(instr->instr_id);
 
     size_t loop_ctr = 0;

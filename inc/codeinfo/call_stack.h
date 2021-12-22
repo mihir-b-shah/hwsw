@@ -23,10 +23,22 @@ struct sym_ref {
 };
 
 struct call_stack {
-  std::string caller;
+  static constexpr size_t STK_SIZE = 10;
+  std::array<int32_t,STK_SIZE> call_stk;
 
-  call_stack() : caller("") {}
-  explicit call_stack(std::string name) : caller(name) {}
+  call_stack() : call_stk{0} {}
+  explicit call_stack(const std::vector<int32_t>& call_stk_v){
+    auto fin = std::copy_n(call_stk_v.rbegin(), std::min(STK_SIZE, call_stk_v.size()), call_stk.begin());
+    std::fill(fin, call_stk.end(), 0);
+  }
+  friend std::ostream& operator<<(std::ostream& os, const call_stack& cs){
+    os << '[';
+    for(auto iter = cs.call_stk.begin(); iter != cs.call_stk.end(); ++iter){
+      os << *iter << ' ';
+    }
+    os << ']';
+    return os;
+  }
 };
 
 struct call_stack_impl {
@@ -55,8 +67,7 @@ public:
   code_info_impl<call_stack>(){}
   call_stack update_impl(ooo_model_instr* instr){
     impl.update_state(instr);
-    string ref = impl.call_stk.empty() ? "" : impl.func_starts[impl.call_stk.back()].name;
-    return call_stack(ref);
+    return call_stack(impl.call_stk);
   }
 
 private:
