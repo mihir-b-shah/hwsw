@@ -26,7 +26,11 @@ run_pass ChgDbg $TMP $DBG_IR_FILE
 OBJ_FILE=$NAME_BASE.o
 EXE_FILE=$NAME_BASE
 
-$LLC $DBG_IR_FILE -O0 -filetype=obj -relocation-model=pic --force-dwarf-frame-section -o $OBJ_FILE
+$LLC $DBG_IR_FILE -O0 -filetype=obj                                 \
+  -relocation-model=pic                                             \
+  --force-dwarf-frame-section                                       \
+  --frame-pointer=all -o $OBJ_FILE
+
 g++ -lm $OBJ_FILE -o $EXE_FILE
 
 rm $TMP $OBJ_FILE
