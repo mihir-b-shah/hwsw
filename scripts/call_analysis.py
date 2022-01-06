@@ -6,7 +6,7 @@ import sys
 file_inp = re.compile(r'^EVENT:\s(\w+)\sPC:\s[0-9a-f]+\sBEFCTXT:\s\[([^\[\]]*)\]\sAFTCTXT:\s\[([^\[\]]*)\]\s*$')
 fpath = sys.argv[1]
 STK_LEN=10
-CHECK_SUBSETS=True
+CHECK_SUBSETS=False
 
 # data collectors
 class EqualCtrs:

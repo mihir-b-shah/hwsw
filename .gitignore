@@ -11,5 +11,6 @@ dpc3_traces/
 info/
 results*/*
 
-spec/benchspec/
-spec/bin/
+spec/
+infgen/build/
+infgen/files/

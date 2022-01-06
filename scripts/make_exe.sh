@@ -10,7 +10,7 @@ $SPEC/bin/specmake clean
 $SPEC/bin/specmake
 cp $EXE_NAME $SPEC/$EXE_NAME.bc
 cd $SPEC
-llc -filetype=obj --relocation-model=pic $EXE_NAME.bc
+llc -filetype=obj --relocation-model=pic $EXE_NAME.bc -O0
 g++ $EXE_NAME.o -lm -o $EXE_NAME
 rm $EXE_NAME.o
 cd $MDIR
