@@ -7,8 +7,6 @@
 #include <string.h>
 #include <string>
 
-#include "code_info.h"
-
 uint8_t warmup_complete[NUM_CPUS], 
         simulation_complete[NUM_CPUS], 
         all_warmup_complete = 0, 
@@ -624,7 +622,6 @@ int main(int argc, char** argv)
             char* strstr_res = strstr(argv[i], ".gz");
             strstr_res = strstr_res == nullptr ? strstr(argv[i], ".xz") : strstr_res;
             size_t ofile_end = strstr_res - argv[i];
-            cerr << argv[i] << ' ' << ofile_start << ' ' << ofile_end << '\n';
             trace_name_ = string(argv[i]+ofile_start, ofile_end-ofile_start);
 
             // get traces.

@@ -22,6 +22,8 @@ void call_stack_impl::init_instr_set(std::unordered_set<uintptr_t>& instrs, FILE
 call_stack_impl::call_stack_impl() : prev_call(false), prev_ret(false), prev_area(false) {
   using namespace std;
 
+  std::cerr << "Hello bob!\n";
+
   string trace_name = get_trace_name();
   trace_name = string("info/") + trace_name;
 
@@ -53,6 +55,8 @@ call_stack_impl::call_stack_impl() : prev_call(false), prev_ret(false), prev_are
   FILE* frets = fopen((trace_name+".rets").c_str(), "r");
   init_instr_set(ret_instrs, frets);
   fclose(frets);
+
+  std::cerr << "Bye bob!\n";
 }
   
 void call_stack_impl::update_state(ooo_model_instr* instr){

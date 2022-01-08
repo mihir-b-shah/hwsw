@@ -16,7 +16,7 @@ IR_FILE=$CHAMPSIM_DIR/spec/$1
 NAME_BASE=$(basename ${IR_FILE%.*})
 
 TMP=tmp.ll
-DBG_IR_FILE=$NAME_BASE.ll
+DBG_IR_FILE=$CHAMPSIM_DIR/info/$NAME_BASE.ll
 
 CURR_DIR=$(pwd)
 cd $INFGEN_DIR/build/ && cmake -DLT_LLVM_INSTALL_DIR=$LLVM_ROOT .. && make && cd $CURR_DIR
@@ -26,7 +26,15 @@ run_pass ChgDbg $TMP $DBG_IR_FILE
 OBJ_FILE=$NAME_BASE.o
 EXE_FILE=$NAME_BASE
 
-$LLC $DBG_IR_FILE -O2 -filetype=obj -relocation-model=pic --force-dwarf-frame-section -o $OBJ_FILE
+$LLC $DBG_IR_FILE -O0 -filetype=obj   \
+  -relocation-model=pic               \
+  --force-dwarf-frame-section         \
+  --frame-pointer=all -o $OBJ_FILE    \
+  --debug-entry-values
+
 g++ -lm $OBJ_FILE -o $EXE_FILE
 
-rm $TMP $OBJ_FILE
+RESULTS_FILE=$CHAMPSIM_DIR/info/$NAME_BASE.crl
+python3 $INFGEN_DIR/dwproc/extract.py $EXE_FILE > $RESULTS_FILE
+
+rm $TMP $OBJ_FILE $EXE_FILE

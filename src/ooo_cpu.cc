@@ -2302,8 +2302,6 @@ void O3_CPU::retire_rob()
         DP ( if (warmup_complete[cpu]) {
         cout << "[ROB] " << __func__ << " instr_id: " << ROB.entry[ROB.head].instr_id << " is retired" << endl; });
 
-        code_informer<call_stack>::get_instance()->handle_retire(&ROB.entry[ROB.head]);
-
         ooo_model_instr empty_entry;
         ROB.entry[ROB.head] = empty_entry;
 	

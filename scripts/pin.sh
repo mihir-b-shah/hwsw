@@ -8,12 +8,14 @@ EXE_NAME=$1
 TRACE_NAME=$2
 NUM_SKIP=$3
 NUM_TRACE=$4
+INPUT_FILE=$5
 
 INIT_OFFS_EXE=$(objdump -d $EXE_NAME            \
   | sed -nE 's/^([0-9a-f]+)\s+<_init>:$/\1/p'   \
   | awk '{ printf("%d\n", "0x" $1) }')
 
-INIT_OFFS_TRACE=$($PIN_ROOT/pin                           \
+INIT_OFFS_TRACE=$(cat $INPUT_FILE                         \
+  | $PIN_ROOT/pin                                         \
   -t $CHAMPSIM_DIR/tracer/obj-intel64/champsim_tracer.so  \
   -o $TRACE_NAME                                          \
   -s $NUM_SKIP -t $NUM_TRACE                              \
