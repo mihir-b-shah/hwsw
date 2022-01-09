@@ -31,9 +31,9 @@ static std::string make_fname(const char* suffix){
 struct correl_info {
   uint32_t bb;
   uint16_t instr;
-  uintptr_t pc_start;
+  uint64_t pc_start;
 
-  correl_info(uint32_t bb, uint16_t instr, uintptr_t pc)
+  correl_info(uint32_t bb, uint16_t instr, uint64_t pc)
     : bb(bb), instr(instr), pc_start(pc) {}
 
   bool operator<(const correl_info& other) const {
@@ -48,7 +48,7 @@ std::unordered_map<std::string, std::vector<correl_info>> read_dbg_file(){
   std::unordered_map<std::string, std::vector<correl_info>> by_func;
 
   std::string func;
-  uintptr_t pc;
+  uint64_t pc;
   uint16_t instr;
   uint32_t bb;
 
@@ -126,7 +126,7 @@ llvm_info::llvm_info(){
     std::ifstream fin(va_fname);
     std::string buf;
     fin >> buf;
-    addr_offset = static_cast<uintptr_t>(stoull(buf, nullptr, 0));
+    addr_offset = static_cast<uint64_t>(stoull(buf, nullptr, 0));
   }
 
   // get debug info
@@ -158,7 +158,7 @@ llvm_info::llvm_info(){
   std::sort(correl.begin(), correl.end());
 }
   
-llvm_info::inst_range& llvm_info::get_llvm_instr(uintptr_t pc){
+llvm_info::inst_range& llvm_info::get_llvm_instr(uint64_t pc){
   auto iter = std::upper_bound(correl.begin(), correl.end(), pc,
     [](double v, const map_info& info){ return v < info.first; });
   return iter->second;

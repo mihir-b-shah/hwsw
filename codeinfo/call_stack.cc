@@ -1,7 +1,7 @@
 
 #include "call_stack.h"
 
-int32_t call_stack_impl::funcmap_context(uintptr_t ip){
+int32_t call_stack_impl::funcmap_context(uint64_t ip){
   sym_ref key(nullptr, ip);
   auto iter = std::upper_bound(func_starts.begin(), func_starts.end(), key);
   if(iter == func_starts.end()){
@@ -12,8 +12,8 @@ int32_t call_stack_impl::funcmap_context(uintptr_t ip){
   }
 }
 
-void call_stack_impl::init_instr_set(std::unordered_set<uintptr_t>& instrs, FILE* f){
-  uintptr_t addr;
+void call_stack_impl::init_instr_set(std::unordered_set<uint64_t>& instrs, FILE* f){
+  uint64_t addr;
   while(fscanf(f, "%" PRIxPTR "\n", &addr) > 0){
     instrs.insert(addr);
   }
@@ -31,13 +31,13 @@ call_stack_impl::call_stack_impl() : prev_call(false), prev_ret(false), prev_are
     std::ifstream fin(trace_name+".offset");
     std::string buf;
     fin >> buf;
-    addr_offset = static_cast<uintptr_t>(stoull(buf, nullptr, 0));
+    addr_offset = static_cast<uint64_t>(stoull(buf, nullptr, 0));
   }
 
   // Setup to allow us to find out, which function am I in?
   FILE* names = fopen((trace_name+".names").c_str(), "r");
 
-  uintptr_t addr;
+  uint64_t addr;
   char name[1025];
 
   while(fscanf(names, "%" PRIxPTR " %s\n", &addr, name) > 0){
@@ -60,7 +60,7 @@ call_stack_impl::call_stack_impl() : prev_call(false), prev_ret(false), prev_are
 }
   
 void call_stack_impl::update_state(ooo_model_instr* instr){
-  uintptr_t ip = instr->ip - vaddr_offset();
+  uint64_t ip = instr->ip - vaddr_offset();
   int32_t fid = funcmap_context(ip);
 
   /*

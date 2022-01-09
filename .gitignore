@@ -14,3 +14,4 @@ results*/*
 spec/
 infgen/build/
 infgen/files/
+infgen/dwproc/__pycache__/

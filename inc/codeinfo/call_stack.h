@@ -16,9 +16,9 @@
   
 struct sym_ref {
   string name;
-  uintptr_t addr;
+  uint64_t addr;
 
-  sym_ref(const char* name, uintptr_t addr) : name(name == nullptr ? "" : name), addr(addr) {}
+  sym_ref(const char* name, uint64_t addr) : name(name == nullptr ? "" : name), addr(addr) {}
   bool operator<(const sym_ref& other) const { return addr < other.addr; }
 };
 
@@ -44,20 +44,20 @@ struct call_stack {
 struct call_stack_impl {
   // vars
   std::vector<sym_ref> func_starts;
-  std::unordered_set<uintptr_t> call_instrs;
-  std::unordered_set<uintptr_t> ret_instrs;
+  std::unordered_set<uint64_t> call_instrs;
+  std::unordered_set<uint64_t> ret_instrs;
   std::vector<int32_t> call_stk;
 
   bool prev_call;
   bool prev_ret;
   bool prev_area;
-  uintptr_t addr_offset;
+  uint64_t addr_offset;
 
   // methods
   call_stack_impl();
-  uintptr_t vaddr_offset(){ return addr_offset; }
-  int32_t funcmap_context(uintptr_t ip);
-  void init_instr_set(std::unordered_set<uintptr_t>& instrs, FILE* f);
+  uint64_t vaddr_offset(){ return addr_offset; }
+  int32_t funcmap_context(uint64_t ip);
+  void init_instr_set(std::unordered_set<uint64_t>& instrs, FILE* f);
   void update_state(ooo_model_instr* instr);
 };
 

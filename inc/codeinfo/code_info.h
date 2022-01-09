@@ -11,7 +11,7 @@ template <template <typename> class impl, typename result_type>
 class code_info {
 protected:
   std::unordered_map<uint64_t, result_type> past_results;
-  uintptr_t past_ip;
+  uint64_t past_ip;
 
 public:
   code_info() : past_ip(0) {}

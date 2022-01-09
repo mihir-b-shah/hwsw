@@ -1,8 +1,10 @@
 
 #include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/IR/Argument.h"
 #include "llvm/IR/DIBuilder.h"
 #include "llvm/IR/DebugInfo.h"
+#include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/InstIterator.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
@@ -12,6 +14,8 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/JSON.h"
+
+#include <unordered_map>
 
 #define DEBUG_TYPE "debugify"
 
@@ -40,6 +44,9 @@ Instruction *findTerminatingInstruction(BasicBlock &BB) {
 }
 } // end anonymous namespace
 
+template<typename T>
+constexpr unsigned myMask(){ return 1 << (8*sizeof(T)-1); }
+
 bool applyDebugifyMetadata(
     Module &M, iterator_range<Module::iterator> Functions, StringRef Banner,
     std::function<bool(DIBuilder &DIB, Function &F)> ApplyToMF) {
@@ -59,11 +66,20 @@ bool applyDebugifyMetadata(
     return DTy;
   };
 
-  unsigned NextLine = 1;
-  unsigned NextVar = 1;
   auto File = DIB.createFile(M.getName(), "/");
   auto CU = DIB.createCompileUnit(dwarf::DW_LANG_C, File, "debugify",
                                   /*isOptimized=*/true, "", 0);
+
+  unsigned NextLine = 0;
+  unsigned NextVar = 0;
+
+  // Visit each global.
+  unsigned glb_ctr = 0;
+  for(auto& global : M.getGlobalList()){
+    global.addDebugInfo(DIB.createGlobalVariableExpression(CU, global.getName(),
+    "", File, glb_ctr, getCachedDIType(global.getType()), true));
+    ++glb_ctr;
+  }
 
   // Visit each instruction.
   for (Function &F : Functions) {
@@ -80,27 +96,53 @@ bool applyDebugifyMetadata(
     auto SP = DIB.createFunction(CU, F.getName(), F.getName(), File, NextLine,
                                  SPType, NextLine, DINode::FlagZero, SPFlags);
     F.setSubprogram(SP);
+    
+    struct instr_id {
+      unsigned bb;
+      unsigned short instr;
+
+      instr_id() : bb(0), instr(0) {}
+      instr_id(unsigned bb, unsigned short instr) : bb(bb), instr(instr) {}
+    };
+    std::unordered_map<llvm::Instruction*, instr_id> imap;
 
     // Helper that inserts a dbg.value before \p InsertBefore, copying the
     // location (and possibly the type, if it's non-void) from \p TemplateInst.
     auto insertDbgVal = [&](Instruction &TemplateInst,
                             Instruction *InsertBefore) {
+      auto info = imap[&TemplateInst];
       std::string Name = utostr(NextVar++);
       Value *V = &TemplateInst;
       if (TemplateInst.getType()->isVoidTy())
         V = ConstantInt::get(Int32Ty, 0);
-      const DILocation *Loc = TemplateInst.getDebugLoc().get();
-      auto LocalVar = DIB.createAutoVariable(SP, Name, File, Loc->getLine(),
+      const DILocation* loc = TemplateInst.getDebugLoc().get();
+      auto LocalVar = DIB.createAutoVariable(SP, Name, File, info.instr,
                                              getCachedDIType(V->getType()),
                                              /*AlwaysPreserve=*/true);
-      DIB.insertDbgValueIntrinsic(V, LocalVar, DIB.createExpression(), Loc,
+      DIB.insertDbgValueIntrinsic(V, LocalVar, DIB.createExpression(), loc,
                                   InsertBefore);
     };
 
+    unsigned bbCtr = 0;
+    errs() << F.getName() << '\n';
     for (BasicBlock &BB : F) {
       // Attach debug locations.
-      for (Instruction &I : BB)
-        I.setDebugLoc(DILocation::get(Ctx, NextLine++, 1, SP));
+      unsigned iCtr = 0;
+      for (Instruction &I : BB){
+        imap[&I] = instr_id(bbCtr, iCtr);
+        errs() << bbCtr << " " << iCtr << '\n';
+        ++iCtr;
+      }
+      ++bbCtr;
+    }
+
+    for (BasicBlock &BB : F) {
+      for (Instruction &I : BB) {
+        instr_id loc_info = imap[&I];
+        errs() << I.getOpcodeName() << " " << loc_info.bb << " " << loc_info.instr << '\n';
+        I.setDebugLoc(DILocation::get(Ctx, myMask<unsigned int>() | (1+loc_info.bb), 
+          myMask<unsigned short>() | (1+loc_info.instr), SP));
+      }
 
       // Inserting debug values into EH pads can break IR invariants.
       if (BB.isEHPad())
@@ -132,6 +174,20 @@ bool applyDebugifyMetadata(
         InsertedDbgVal = true;
       }
     }
+
+    // Add params
+    unsigned arg_ctr = 0;
+    for(Argument& arg : F.args()){
+      // don't care about line here
+      auto dParam = DIB.createParameterVariable(SP, arg.getName(), arg_ctr, File, 
+        0, getCachedDIType(arg.getType()), true);
+      ++arg_ctr;
+      
+      Instruction* firstInstr = F.front().getFirstNonPHIOrDbgOrLifetime();
+      DIB.insertDbgValueIntrinsic(&arg, dParam, DIB.createExpression(), 
+        DILocation::get(F.getParent()->getContext(), 0, 0, SP), firstInstr);
+    }
+
     // Make sure we emit at least one dbg.value, otherwise MachineDebugify may
     // not have anything to work with as it goes about inserting DBG_VALUEs.
     // (It's common for MIR tests to be written containing skeletal IR with
