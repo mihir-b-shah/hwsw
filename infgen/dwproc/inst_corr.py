@@ -29,3 +29,11 @@ def get_entries(dwarf_info, compile_unit, addr_to_func):
     filter(lambda entry : entry.state != None, 
       dwarf_info.line_program_for_CU(compile_unit).get_entries()
   ))))), key=make_dbg_sorter(addr_to_func))
+
+def entry_sorter(e):
+  return (e.line << 16) | e.column
+
+# sort and remove duplicates
+def process_entries(entries):
+  return map(lambda grp : max(grp[1], key=lambda v: v.address),
+    itertools.groupby(sorted(entries, key=entry_sorter), key=entry_sorter))

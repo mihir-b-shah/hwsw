@@ -16,6 +16,7 @@
 #include "llvm/Support/JSON.h"
 
 #include <unordered_map>
+#include <cassert>
 
 #define DEBUG_TYPE "debugify"
 
@@ -74,10 +75,10 @@ bool applyDebugifyMetadata(
   unsigned NextVar = 0;
 
   // Visit each global.
-  unsigned glb_ctr = 0;
+  unsigned glb_ctr = 1;
   for(auto& global : M.getGlobalList()){
     global.addDebugInfo(DIB.createGlobalVariableExpression(CU, global.getName(),
-    "", File, glb_ctr, getCachedDIType(global.getType()), true));
+    "", File, myMask<unsigned int>() | glb_ctr, getCachedDIType(global.getType()), true));
     ++glb_ctr;
   }
 
@@ -110,8 +111,9 @@ bool applyDebugifyMetadata(
     // location (and possibly the type, if it's non-void) from \p TemplateInst.
     auto insertDbgVal = [&](Instruction &TemplateInst,
                             Instruction *InsertBefore) {
+      assert(imap.find(&TemplateInst) != imap.end());
       auto info = imap[&TemplateInst];
-      std::string Name = utostr(NextVar++);
+      std::string Name = utostr(info.bb);
       Value *V = &TemplateInst;
       if (TemplateInst.getType()->isVoidTy())
         V = ConstantInt::get(Int32Ty, 0);
@@ -123,14 +125,12 @@ bool applyDebugifyMetadata(
                                   InsertBefore);
     };
 
-    unsigned bbCtr = 0;
-    errs() << F.getName() << '\n';
+    unsigned bbCtr = 1;
     for (BasicBlock &BB : F) {
       // Attach debug locations.
-      unsigned iCtr = 0;
+      unsigned iCtr = 1;
       for (Instruction &I : BB){
         imap[&I] = instr_id(bbCtr, iCtr);
-        errs() << bbCtr << " " << iCtr << '\n';
         ++iCtr;
       }
       ++bbCtr;
@@ -139,9 +139,8 @@ bool applyDebugifyMetadata(
     for (BasicBlock &BB : F) {
       for (Instruction &I : BB) {
         instr_id loc_info = imap[&I];
-        errs() << I.getOpcodeName() << " " << loc_info.bb << " " << loc_info.instr << '\n';
-        I.setDebugLoc(DILocation::get(Ctx, myMask<unsigned int>() | (1+loc_info.bb), 
-          myMask<unsigned short>() | (1+loc_info.instr), SP));
+        I.setDebugLoc(DILocation::get(Ctx, myMask<unsigned int>() | (loc_info.bb), 
+          myMask<unsigned short>() | (loc_info.instr), SP));
       }
 
       // Inserting debug values into EH pads can break IR invariants.
@@ -176,7 +175,7 @@ bool applyDebugifyMetadata(
     }
 
     // Add params
-    unsigned arg_ctr = 0;
+    unsigned arg_ctr = 1;
     for(Argument& arg : F.args()){
       // don't care about line here
       auto dParam = DIB.createParameterVariable(SP, arg.getName(), arg_ctr, File, 

@@ -1,7 +1,7 @@
 
 from elftools.dwarf.descriptions import describe_form_class
 
-def get_addr_func(compile_unit):
+def get_addr_func(index):
   return sorted(
     map(lambda entry : (entry[0].value, 
                         entry[1].value 
@@ -11,6 +11,5 @@ def get_addr_func(compile_unit):
     map(lambda entry : (entry.attributes['DW_AT_low_pc'], 
                         entry.attributes['DW_AT_high_pc'], 
                         entry.attributes['DW_AT_name']),
-    filter(lambda entry : entry.tag == 'DW_TAG_subprogram',
-    compile_unit.iter_DIEs()))))
+    index['DW_TAG_subprogram'])))
     

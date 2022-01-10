@@ -5,6 +5,7 @@
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/StringRef.h>
 #include <llvm/IR/Function.h>
+#include <llvm/IR/InstIterator.h>
 #include <llvm/IR/IntrinsicInst.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/LLVMContext.h>
@@ -53,7 +54,7 @@ std::unordered_map<std::string, std::vector<correl_info>> read_dbg_file(){
   uint32_t bb;
 
   while(fin >> std::hex >> pc >> std::dec >> instr >> bb >> func){
-    by_func[func].push_back(correl_info(bb, instr, pc));
+    by_func[func].emplace_back(bb, instr, pc);
   }
 
   for(auto iter = by_func.begin(); iter != by_func.end(); ++iter){
@@ -62,48 +63,50 @@ std::unordered_map<std::string, std::vector<correl_info>> read_dbg_file(){
   return by_func;
 }
 
-// could inherit from InstIterator but more pain than worth it.
-template<typename bb_iter_t, typename inst_iter_t>
 class my_inst_iterator {
 private:
-  llvm::Function* func;
+  llvm::Function* f;
+  llvm::BasicBlock* bb;
   uint32_t bb_num_;
   uint16_t i_num_;
-  bb_iter_t bb_iter_;
-  inst_iter_t inst_iter_;
-  bool done;
-  
+  llvm::inst_iterator inst_iter_;
+  bool done_;
+
+  void skip_debug(){
+    while(inst_iter_ != llvm::inst_end(f) && llvm::isa<llvm::DbgInfoIntrinsic>(&*inst_iter_)){
+      ++inst_iter_;
+    }
+  }
+
 public:
   my_inst_iterator(llvm::Function* f) 
-    : func(f), bb_num_(0), i_num_(0), done(false) {
-    bb_iter_ = f->begin();
-    inst_iter_ = bb_iter_->begin();
+    : f(f), bb(nullptr), bb_num_(0), i_num_(0), done_(false) {
+    inst_iter_ = llvm::inst_begin(f);
+    skip_debug();
   }
 
   uint32_t bb_num(){ return bb_num_; }
   uint32_t i_num(){ return i_num_; }
-  llvm::Instruction& get_instr(){ return *inst_iter_; }
+  llvm::Instruction* get_instr(){ return &*inst_iter_; }
+  bool done(){ return done_; }
 
-  bool advance(){
-    if(done){ return false; }
+  void advance(){
+    if(done_){ return; }
 
-    ++i_num_;
     ++inst_iter_;
-
-    if(inst_iter_ == bb_iter_->end()){
-      ++bb_num_;
-      ++bb_iter_;
-
-      if(bb_iter_ == func->end()){
-        done = true;
-        return false;
-      }
-
-      i_num_ = 0;
-      inst_iter_ = bb_iter_->begin();
+    skip_debug();
+    if(inst_iter_ == llvm::inst_end(f)){
+      done_ = true;
+      return;
     }
-
-    return true;
+    
+    if(bb != nullptr && inst_iter_->getParent() != bb){
+      ++bb_num_;
+      i_num_ = 0;
+    } else {
+      ++i_num_;
+    }
+    bb = inst_iter_->getParent();
   }
 };
 
@@ -137,21 +140,21 @@ llvm_info::llvm_info(){
       continue;
     }
 
-    my_inst_iterator<Function::BasicBlockListType::iterator,
-      BasicBlock::InstListType::iterator> llvm_iter(f);
+    my_inst_iterator llvm_iter(f);
 
     // guaranteed every llvm instr can correspond to only one dbg element
-    bool matches;
     for(const correl_info& cinfo : entry.second){
       correl.emplace_back();
+      bool matches = false;
       do {
-        Instruction& ins = llvm_iter.get_instr();
-        if(!isa<DbgInfoIntrinsic>(ins)){
-          correl.back().first = cinfo.pc_start;
-          correl.back().second.push_back(&ins);
-        }
+        Instruction* ins = llvm_iter.get_instr();
+
+        correl.back().first = cinfo.pc_start;
+        correl.back().second.push_back(ins);
+
         matches = (llvm_iter.bb_num() == cinfo.bb) && (llvm_iter.i_num() == cinfo.instr);
-      } while(llvm_iter.advance() && !matches);
+        llvm_iter.advance();
+      } while(!llvm_iter.done() && !matches);
     }
   }
 
