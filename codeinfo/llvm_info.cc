@@ -20,13 +20,15 @@
 #include <fstream>
 #include <vector>
 #include <algorithm>
+#include <regex>
+#include <cstdlib>
 
 #include "champsim.h"
 
 namespace llvm_info_impl {
 
 static std::string make_fname(const char* suffix){
-  return std::string("info") + get_trace_name() + suffix;
+  return std::string("info/") + get_trace_name() + suffix;
 }
 
 struct correl_info {
@@ -42,25 +44,48 @@ struct correl_info {
   }
 };
 
-std::unordered_map<std::string, std::vector<correl_info>> read_dbg_file(){
+struct parsed_objs {
+  std::unordered_map<std::string, std::vector<correl_info>> by_func;
+  std::unordered_map<std::string, std::pair<uint64_t, uint64_t>> frange;
+};
+
+uint64_t parse_u64(const std::string& str, int base){
+  return std::stoull(str, nullptr, base);
+}
+
+parsed_objs* read_dbg_file(){
   std::string fname = make_fname(".crl");
   std::ifstream fin(fname);
 
-  std::unordered_map<std::string, std::vector<correl_info>> by_func;
+  // lifetimes here are driving me crazy
+  parsed_objs* ret_obj = new parsed_objs;
+
+  auto& by_func = ret_obj->by_func;
+  auto& frange = ret_obj->frange;
+
+  std::regex func_header("^FUNC\\s+([0-9a-f]+)\\s+([0-9a-f]+)\\s+(\\S+)$");
+  std::regex ir_entry("^IR\\s+([0-9a-f]+)\\s+(\\d+)\\s+(\\d+)$");
 
   std::string func;
-  uint64_t pc;
-  uint16_t instr;
-  uint32_t bb;
+  while(!fin.eof()){
+    std::string line;
+    std::getline(fin, line);
 
-  while(fin >> std::hex >> pc >> std::dec >> instr >> bb >> func){
-    by_func[func].emplace_back(bb, instr, pc);
+    std::smatch match;
+    if(std::regex_match(line, match, ir_entry)){
+      by_func[func].emplace_back(parse_u64(match[3], 10), 
+        parse_u64(match[2], 10), parse_u64(match[1], 16));
+    } else if(std::regex_match(line, match, func_header)){
+      func = match[3];
+      frange[func] = std::make_pair<uint64_t, uint64_t>(
+        parse_u64(match[1], 16), parse_u64(match[2], 16));
+    } // else just skip it.
   }
 
   for(auto iter = by_func.begin(); iter != by_func.end(); ++iter){
     std::sort(iter->second.begin(), iter->second.end());
   }
-  return by_func;
+  return ret_obj;
 }
 
 class my_inst_iterator {
@@ -126,6 +151,7 @@ llvm_info::llvm_info(){
   // get vaddr offset
   const auto va_fname = make_fname(".offset");
   {
+    std::cerr << va_fname << '\n';
     std::ifstream fin(va_fname);
     std::string buf;
     fin >> buf;
@@ -133,17 +159,26 @@ llvm_info::llvm_info(){
   }
 
   // get debug info
-  auto fmap = read_dbg_file(); 
+  parsed_objs* dbg_objs = read_dbg_file(); 
+  auto& fmap = dbg_objs->by_func;
+  auto& frange = dbg_objs->frange;
+
   for(const auto& entry : fmap){
     Function* f = mod->getFunction(entry.first);
     if(f == nullptr){
       continue;
     }
+    assert(frange.find(entry.first) != frange.end());
+    this->func_starts[f] = dbg_objs->frange[entry.first];
 
     my_inst_iterator llvm_iter(f);
+    int first_correl_pos = -1;
 
     // guaranteed every llvm instr can correspond to only one dbg element
     for(const correl_info& cinfo : entry.second){
+      if(first_correl_pos == -1){
+        first_correl_pos = static_cast<int>(correl.size());
+      }
       correl.emplace_back();
       bool matches = false;
       do {
@@ -156,14 +191,45 @@ llvm_info::llvm_info(){
         llvm_iter.advance();
       } while(!llvm_iter.done() && !matches);
     }
+
+    // include the function prologue in the first correlation's range.
+    if(first_correl_pos != -1){
+      correl[first_correl_pos].first = this->func_starts[f].first;
+    }
   }
+
+  // first dummy
+  correl.emplace_back();
+  correl.back().first = 0x0;
+  // last dummy
+  correl.emplace_back();
+  correl.back().first = 0x200000000000ULL;
 
   std::sort(correl.begin(), correl.end());
 }
   
-llvm_info::inst_range& llvm_info::get_llvm_instr(uint64_t pc){
-  auto iter = std::upper_bound(correl.begin(), correl.end(), pc,
-    [](double v, const map_info& info){ return v < info.first; });
-  return iter->second;
+llvm_info::inst_range* llvm_info::get_llvm_instrs(uint64_t pc){
+  map_info info;
+  uint64_t real_addr = pc-addr_offset;
+  info.first = real_addr;
+
+  auto iter = std::upper_bound(correl.begin(), correl.end(), info,
+    [](const map_info& prior, const map_info& info){ return prior.first < info.first; });
+  --iter;
+
+  if(iter->second.size() == 0){
+    // invalid.
+    return nullptr;
+  } else {
+    auto instr = iter->second.back();
+    auto& addr_range = this->func_starts[instr->getFunction()];
+    if(addr_range.first <= real_addr && real_addr <= addr_range.second){
+      // valid
+      return &(iter->second);
+    } else {
+      return nullptr;
+      // invalid
+    }
+  }
 }
 

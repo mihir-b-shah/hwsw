@@ -1,8 +1,9 @@
 #include "ooo_cpu.h"
 #include "set.h"
 
-#include "code_informer.h"
-#include "call_stack.h"
+#include "info_manager.h"
+
+#include <string>
 
 // out-of-order core
 O3_CPU ooo_cpu[NUM_CPUS]; 
@@ -2301,6 +2302,9 @@ void O3_CPU::retire_rob()
         // release ROB entry
         DP ( if (warmup_complete[cpu]) {
         cout << "[ROB] " << __func__ << " instr_id: " << ROB.entry[ROB.head].instr_id << " is retired" << endl; });
+
+        // print instr
+        info_manager::get_instance()->update_all(&ROB.entry[ROB.head]);
 
         ooo_model_instr empty_entry;
         ROB.entry[ROB.head] = empty_entry;

@@ -22,6 +22,8 @@ INIT_OFFS_TRACE=$(cat $INPUT_FILE                         \
   -- $EXE_NAME                                            \
   | sed -nE 's/^\*\*\* MIHIR_ADDR:\s([0-9]+)\s*$/\1/p')
 
+echo "Finished tracing."
+
 # put the offset in the file.
 printf "%#x\n" $((INIT_OFFS_TRACE - INIT_OFFS_EXE))  \
   >$CHAMPSIM_DIR/info/$TRACE_NAME.offset

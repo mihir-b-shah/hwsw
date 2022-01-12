@@ -118,9 +118,8 @@ bool applyDebugifyMetadata(
       if (TemplateInst.getType()->isVoidTy())
         V = ConstantInt::get(Int32Ty, 0);
       const DILocation* loc = TemplateInst.getDebugLoc().get();
-      auto LocalVar = DIB.createAutoVariable(SP, Name, File, info.instr,
-                                             getCachedDIType(V->getType()),
-                                             /*AlwaysPreserve=*/true);
+      auto LocalVar = DIB.createAutoVariable(SP, Name, File,
+        info.instr, getCachedDIType(V->getType()), /*AlwaysPreserve=*/true);
       DIB.insertDbgValueIntrinsic(V, LocalVar, DIB.createExpression(), loc,
                                   InsertBefore);
     };
@@ -179,7 +178,7 @@ bool applyDebugifyMetadata(
     for(Argument& arg : F.args()){
       // don't care about line here
       auto dParam = DIB.createParameterVariable(SP, arg.getName(), arg_ctr, File, 
-        0, getCachedDIType(arg.getType()), true);
+        arg_ctr, getCachedDIType(arg.getType()), true);
       ++arg_ctr;
       
       Instruction* firstInstr = F.front().getFirstNonPHIOrDbgOrLifetime();

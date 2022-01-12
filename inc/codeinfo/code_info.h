@@ -4,8 +4,10 @@
 
 #include <cinttypes>
 #include <unordered_map>
+#include <iostream>
 
 #include "instruction.h"
+#include "llvm_info.h"
 
 template <template <typename> class impl, typename result_type>
 class code_info {
@@ -17,9 +19,10 @@ public:
   code_info() : past_ip(0) {}
   virtual ~code_info(){}
 
-  void update(ooo_model_instr* instr){
+  void update(llvm_info::inst_range* llvm_instrs, ooo_model_instr* instr){
     if(instr->ip != past_ip){
-      past_results[instr->instr_id] = static_cast<impl<result_type>*>(this)->update_impl(instr);
+      past_results[instr->instr_id] = static_cast<impl<result_type>*>(this)
+        ->update_impl(llvm_instrs, instr);
       past_ip = instr->ip;
     }
   }

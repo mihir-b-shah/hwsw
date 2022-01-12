@@ -1,132 +1,100 @@
 
+#include <llvm/ADT/SmallVector.h>
+#include <llvm/IR/Function.h>
+#include <llvm/IR/Instruction.h>
+#include <llvm/IR/Instructions.h>
+#include <llvm/Support/Casting.h>
+
 #include "call_stack.h"
+#include "llvm_info.h"
 
-int32_t call_stack_impl::funcmap_context(uint64_t ip){
-  sym_ref key(nullptr, ip);
-  auto iter = std::upper_bound(func_starts.begin(), func_starts.end(), key);
-  if(iter == func_starts.end()){
-    // probably not in a function- somewhere external !!
-    return -1;
+call_stack::call_stack(bool valid, const std::vector<llvm::Function*>& call_stk_v) : valid(valid) {
+  auto fin = std::copy_n(call_stk_v.rbegin(), std::min(size_t(STK_SIZE), call_stk_v.size()),
+    call_stk.begin());
+  std::fill(fin, call_stk.end(), nullptr);
+}
+
+std::ostream& operator<<(std::ostream& os, const call_stack& cs){
+  if(cs.valid){
+    os << '[';
+    for(auto iter = cs.call_stk.begin(); iter != cs.call_stk.end(); ++iter){
+      os << (*iter == nullptr ? "NULL" : (*iter)->getName().str()) << ' ';
+    }
+    os << ']';
   } else {
-    return std::distance(func_starts.begin(), iter)-1;
+    os << "[ INVALID ]";
+  }
+  return os;
+}
+
+call_stack_impl::call_stack_impl() 
+  : prev_func(nullptr), prev_call(false), prev_ret(false), valid(false) {}
+
+llvm::Function* get_func(llvm_info::inst_range* insts){
+  if(insts == nullptr || insts->size() == 0){
+    return nullptr;
+  } else {
+    return insts->back()->getFunction();
   }
 }
 
-void call_stack_impl::init_instr_set(std::unordered_set<uint64_t>& instrs, FILE* f){
-  uint64_t addr;
-  while(fscanf(f, "%" PRIxPTR "\n", &addr) > 0){
-    instrs.insert(addr);
+template<typename T>
+bool is_instr_type(llvm_info::inst_range* insts){
+  if(insts == nullptr) return false;
+  for(const llvm::Instruction* instr : *insts){
+    if(llvm::isa<T>(instr)) return true;
   }
+  return false;
+}
+ 
+std::string print_func(llvm::Function* fn){
+  return fn != nullptr ? fn->getName().str() : "nilf";
 }
 
-call_stack_impl::call_stack_impl() : prev_call(false), prev_ret(false), prev_area(false) {
-  using namespace std;
-
-  std::cerr << "Hello bob!\n";
-
-  string trace_name = get_trace_name();
-  trace_name = string("info/") + trace_name;
-
-  {
-    std::ifstream fin(trace_name+".offset");
-    std::string buf;
-    fin >> buf;
-    addr_offset = static_cast<uint64_t>(stoull(buf, nullptr, 0));
+void call_stack_impl::update_state(llvm_info::inst_range* insts, ooo_model_instr* instr){
+  llvm::Function* curr_func = get_func(insts);
+  this->valid = curr_func != nullptr;
+  // std::cerr << std::hex << (instr->ip - llvm_info::get_instance()->vaddr_offset()) << std::dec << " " << print_func(prev_func) << " -> " << print_func(curr_func) << '\n';
+  if(prev_func != nullptr && curr_func != nullptr && prev_func != curr_func){
+    if(prev_call){
+      call_stk.push_back(curr_func);
+    } else if(prev_ret){
+      if(!call_stk.empty()) call_stk.pop_back();
+    } else {
+      // i dont know- could be a jmp of some kind, just dont touch the call stack.
+    }
   }
-
-  // Setup to allow us to find out, which function am I in?
-  FILE* names = fopen((trace_name+".names").c_str(), "r");
-
-  uint64_t addr;
-  char name[1025];
-
-  while(fscanf(names, "%" PRIxPTR " %s\n", &addr, name) > 0){
-    func_starts.push_back(sym_ref(const_cast<const char*>(name), addr));
-  }
-  func_starts.push_back(sym_ref("__SENTINEL__", 0x100000000));
-  sort(func_starts.begin(), func_starts.end());
-  fclose(names);
-
-  // Setup to find out, is this a call/ret/other instruction?
-  FILE* fcalls = fopen((trace_name+".calls").c_str(), "r");
-  init_instr_set(call_instrs, fcalls);
-  fclose(fcalls);
-
-  FILE* frets = fopen((trace_name+".rets").c_str(), "r");
-  init_instr_set(ret_instrs, frets);
-  fclose(frets);
-
-  std::cerr << "Bye bob!\n";
-}
-  
-void call_stack_impl::update_state(ooo_model_instr* instr){
-  uint64_t ip = instr->ip - vaddr_offset();
-  int32_t fid = funcmap_context(ip);
 
   /*
-  std::fprintf(stderr, "rip: %lx ip: %lx call: %d ret: %d parea: %d fid: %d ", rip, ip, prev_call, prev_ret, prev_area, fid);
-  if(fid == -1){
-    std::cerr << "fname: " << "LIB_FUNC" << '\n';
-  } else {
-    std::cerr << "fname: " << func_starts[fid].name << '\n';
-  }
+  2 states- either in user code or non-user code
+  we only have info about user code.
+
+  hence transitions as follows:
+  code->code (normal)
+  lib->lib (dont care)
+  lib->code (only one that matters is main())
+  code->lib (should come back to me)
+
+  hence, if we don't care about seeing main (not too big deal, as a feature
+  it is useless since everyone is from main), we can treat lib context
+  as just straight-line code in the current context.
   */
 
-  // state machine time!
-  switch((prev_call << 3) | (prev_ret << 2) 
-     | ((fid != -1) << 1) | prev_area){
-  case 0b0001:
-  case 0b0101:
-  case 0b1001:
-    // if transitioning, don't push new context.
-    // technically, only 1001 should be valid, but
-    // bc of jumps/trampolining using ret, could be valid.
-    break;
-  case 0b0011:
-    // running along in the program.
-    break;
-  case 0b1011:
-    // just had call instr in program, push new context!
-    call_stk.push_back(fid);
-    break;
-  case 0b0111:
-    // just had ret instr in program, pop context!
-    // think should be asserted...
-    if(!call_stk.empty()){
-      call_stk.pop_back();
-    }
-    // cannot assert that top() == fid, b/c of possible trampolining.
-    break;
-  case 0b0000:
-    // i am running in library code, do nothing.
-    break;
-  case 0b0010:
-  case 0b0110:
-  case 0b1010:
-    // i was in library code, came into program space.
-    // only time to add myself to stack is if nothing 
-    // is there. Nothing should be there the first time.
-    if(call_stk.empty()){
-      call_stk.push_back(fid);
-    }
-    break;
-  case 0b0100:
-  case 0b1000:
-    // if not in a exe region, i dont care about call/ret instructions.
-    // possible assert?
-    break;
-  case 0b1100:
-  case 0b1101:
-  case 0b1110:
-  case 0b1111:
-    // invalid, prev_call cannot be on with prev_ret
-    assert(false);
-    break;
-  }
+  prev_func = curr_func;
+  prev_call = is_instr_type<llvm::CallInst>(insts);
+  prev_ret = is_instr_type<llvm::ReturnInst>(insts);
 
-  prev_call = call_instrs.find(ip) != call_instrs.end();
-  prev_ret = ret_instrs.find(ip) != ret_instrs.end();
-  assert(!prev_call || !prev_ret);
-  prev_area = fid != -1;
+  /*
+  if(insts != nullptr){
+    std::cerr << insts->back()->getOpcodeName() << " ";
+  } else {
+    std::cerr << "none ";
+  }
+  std::cerr << '[';
+  for(auto iter = call_stk.begin(); iter != call_stk.end(); ++iter){
+    std::cerr << (*iter == nullptr ? "NULL" : (*iter)->getName().str()) << ' ';
+  }
+  std::cerr << "]\n";
+  */
 }
   

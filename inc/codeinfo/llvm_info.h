@@ -8,6 +8,7 @@
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
 
+#include <unordered_map>
 #include <vector>
 #include <cstdint>
 #include <utility>
@@ -22,7 +23,7 @@ public:
   }
 
   typedef llvm::SmallVector<llvm::Instruction*, 2> inst_range;
-  inst_range& get_llvm_instr(uint64_t pc);
+  inst_range* get_llvm_instrs(uint64_t pc);
 
   uint64_t vaddr_offset(){ return addr_offset; }
 
@@ -33,6 +34,7 @@ private:
   
   typedef std::pair<uint64_t, inst_range> map_info;
   std::vector<map_info> correl;
+  std::unordered_map<llvm::Function*, std::pair<uint64_t, uint64_t>> func_starts;
 };
 
 #endif

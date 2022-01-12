@@ -7,6 +7,7 @@
 #include <initializer_list>
 
 #include "code_info.h"
+#include "llvm_info.h"
 
 template<typename result_type>
 class code_informer {
@@ -39,8 +40,8 @@ public:
     todo[trigger] = new query_impl<query_cb>(trigger, iid_list, cb);
   }
 
-  void handle_retire(ooo_model_instr* instr){
-    info.update(instr);
+  void handle_retire(llvm_info::inst_range* llvm_instrs, ooo_model_instr* instr){
+    info.update(llvm_instrs, instr);
 
     auto todo_iter = todo.find(instr->instr_id);
     if(todo_iter == todo.end()){ return; }
