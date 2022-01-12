@@ -53,6 +53,9 @@ with open(fpath, 'r') as f:
     res = file_inp.match(line)
     if(res != None):
       event_type = res.group(1)
+      if(res.group(2) == 'INVALID' or res.group(3) == 'INVALID'):
+        continue
+
       bef_ctxt = res.group(2).split(' ')
       bef_ctxt.pop()
       aft_ctxt = res.group(3).split(' ')
