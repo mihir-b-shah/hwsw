@@ -79,12 +79,13 @@ void sisb_prefetcher_operate(uint64_t addr, uint64_t pc, uint8_t cache_hit, uint
         bool divergent = cache_iter != cache.end() && cache_iter->second != addr_B;
         bool convergent = cache_iter != cache.end() && cache_iter->second == addr_B;
 
-        code_informer<call_stack>::get_instance()->accept_query(instr_id, 
-          {context[cache_idx]}, [pc, divergent, convergent](const std::vector<call_stack>& results){
+        instr_ids_t ops = {{context[cache_idx]}};
+        code_informer::get_instance()->accept_query(instr_id, 
+          ops, [pc, divergent, convergent](const results_t& results){
             std::cerr << "EVENT: " << (divergent ? "divrg" : convergent ? "convg" : "fresh")
                       << " PC: " << std::hex << pc << std::dec
-                      << " BEFCTXT: " << results[1]
-                      << " AFTCTXT: " << results[0] << '\n';
+                      << " BEFCTXT: " << std::get<0>(results)[1]
+                      << " AFTCTXT: " << std::get<0>(results)[0] << '\n';
           });
 
         if (divergent) {

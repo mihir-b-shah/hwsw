@@ -11,6 +11,5 @@ void info_manager::update_all(ooo_model_instr* instr){
   llvm_info::inst_range* correl_irs = instance->get_llvm_instrs(instr->ip);
 
   // all instances
-  code_informer<call_stack>::get_instance()
-    ->handle_retire(correl_irs, instr);
+  code_informer::get_instance()->handle_retire(correl_irs, instr);
 }

@@ -54,7 +54,7 @@ std::string print_func(llvm::Function* fn){
 void call_stack_impl::update_state(llvm_info::inst_range* insts, ooo_model_instr* instr){
   llvm::Function* curr_func = get_func(insts);
   this->valid = curr_func != nullptr;
-  //std::cerr << std::hex << (instr->ip - llvm_info::get_instance()->vaddr_offset()) << std::dec << " " << print_func(prev_func) << " -> " << print_func(curr_func) << '\n';
+  // std::cerr << std::hex << (instr->ip - llvm_info::get_instance()->vaddr_offset()) << std::dec << " " << print_func(prev_func) << " -> " << print_func(curr_func) << '\n';
   if(prev_func != nullptr && curr_func != nullptr && prev_func != curr_func){
     if(prev_call){
       call_stk.push_back(curr_func);
