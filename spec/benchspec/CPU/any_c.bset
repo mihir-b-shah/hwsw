@@ -1,0 +1,18 @@
+# This file contains a list of the benchmarks written in
+# C (in part or in whole).
+# It is automatically generated.
+
+$name        = 'any_c';
+$unitbase    = 'NOTAnyKindOfCPUmark';
+$metricbase  = 'some_or_none';
+$metric      = 'CPU2017';
+$ref         = 'ref';
+$train       = 'train';
+$test        = 'test';
+$output      = 0;
+@benchmarks = qw(
+  500.perlbench_r
+  505.mcf_r
+);
+
+1;

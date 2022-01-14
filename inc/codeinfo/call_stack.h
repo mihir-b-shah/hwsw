@@ -42,8 +42,6 @@ public:
   void update_state(llvm_info::inst_range* llvm_instrs, ooo_model_instr* instr);
 };
 
-class call_stack_impl;
-
 template<>
 class code_info_impl<call_stack> : public code_info<code_info_impl, call_stack> {
 public:

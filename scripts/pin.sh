@@ -1,7 +1,4 @@
 
-# tail the output of pin.sh to get the offset.
-# by design, so you can see the errors on stderr and offset on stdout
-
 set -e
 
 EXE_NAME=$1

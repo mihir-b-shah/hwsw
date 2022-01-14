@@ -22,7 +22,7 @@ cd $INFGEN_DIR/build/ && cmake -DLT_LLVM_INSTALL_DIR=$LLVM_ROOT .. && make && cd
 run_pass AddDbg $IR_FILE $DBG_IR_FILE
 
 OBJ_FILE=$NAME_BASE.o
-EXE_FILE=$NAME_BASE
+EXE_FILE=$CHAMPSIM_DIR/info/$NAME_BASE
 
 $LLC $DBG_IR_FILE -O0 -filetype=obj   \
   -relocation-model=pic               \

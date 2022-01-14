@@ -11,7 +11,10 @@ dpc3_traces/
 info/
 results*/*
 
-spec/
+spec/*.bc
+spec/bin/
+spec/benchspec/CPU/5*
+
 infgen/build/
 infgen/files/
 infgen/dwproc/__pycache__/
