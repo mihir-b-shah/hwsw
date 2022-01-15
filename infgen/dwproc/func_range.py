@@ -1,6 +1,10 @@
 
 from elftools.dwarf.descriptions import describe_form_class
 
+'''
+input: (from the index), a list of subprogram objects
+output: a list of (low_pc, high_pc, func_name) tuples
+'''
 def get_addr_func(index):
   return sorted(
     map(lambda entry : (entry[0].value, 

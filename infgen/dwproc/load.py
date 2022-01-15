@@ -1,4 +1,11 @@
 
+'''
+The loader- there are generally three data structures from pyelftools
+that we want- the dwarf_info object, that has some useful methods,
+the compile_unit, which is accessed from dwarf_info but we don't want
+to have to dereference every time, and the index of the compile_unit.
+'''
+
 import sys
 from elftools.elf.elffile import ELFFile
 
@@ -10,6 +17,11 @@ def make_die_index(compile_unit):
     index[entry.tag].append(entry)
   return index
 
+'''
+Note the pattern here- this is NOT the main function,
+main is typically the handler- so we can isolate what
+we want to do from the loading logic.
+'''
 def process_file(filename, handler):
   with open(filename, 'rb') as f:
     elffile = ELFFile(f)

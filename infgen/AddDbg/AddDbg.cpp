@@ -28,6 +28,14 @@ uint64_t getAllocSizeInBits(Module &M, Type *Ty) {
   return Ty->isSized() ? M.getDataLayout().getTypeAllocSizeInBits(Ty) : 0;
 }
 
+/*  Skip only if it's a declaration, because we only care about
+    functions with instructions. We commented out hasExactDef
+    because it's more for linkage/inlining reasons- if it turns
+    out the debugging info doesn't show up, no harm done.
+    
+    A better description here: 
+    https://llvm.org/doxygen/GlobalValue_8h_source.html#l00387 */
+
 bool isFunctionSkipped(Function &F) {
   return F.isDeclaration(); // || !F.hasExactDefinition();
 }
@@ -45,6 +53,11 @@ Instruction *findTerminatingInstruction(BasicBlock &BB) {
 }
 } // end anonymous namespace
 
+/*  I'm not in perfect control of debugging information. As such,
+    I want to make sure I can identify debugging information of a particular
+    type, or even more important, whether it was me that inserted it in
+    the first place. Hence, I bit-OR the value with myMask(), so I know
+    where it came from. */
 template<typename T>
 constexpr unsigned myMask(){ return 1 << (8*sizeof(T)-1); }
 
@@ -74,7 +87,13 @@ bool applyDebugifyMetadata(
   unsigned NextLine = 0;
   unsigned NextVar = 0;
 
-  // Visit each global.
+  /*  This is an addition of mine. The global list is iterated in the same order
+      as it is in the LLVM bitcode file, so a position in the list is pointing
+      to the same global whenever we load the bitcode.
+      Hence, as described in documentation, we use the glb_ctr to number them off,
+      in place of the line number.
+      We mask it since DW_TAG_variable could be local variables (down below), or
+      these globals. To distinguish, only globals are masked. */
   unsigned glb_ctr = 1;
   for(auto& global : M.getGlobalList()){
     global.addDebugInfo(DIB.createGlobalVariableExpression(CU, global.getName(),
@@ -98,6 +117,16 @@ bool applyDebugifyMetadata(
                                  SPType, NextLine, DINode::FlagZero, SPFlags);
     F.setSubprogram(SP);
     
+    /*  The imap is useful for telling us, for a given instruction, what is the
+        basic block number, and instruction number in its function? Note, the
+        numberings are based on the original module, not after whatever IR
+        instructions are added in our pass.
+        Note that bb is a full 32-bit integer (at least, on most platforms),
+        and instr is a 16-bit integer. This mimicks the line and column numbers,
+        since we will be sticking these fields into those. 
+        Note, why are bb and instr initialized to 0? This is because 0 is treated
+        as an invalid quantity in debugging information, and all numbers start
+        from 1 in debugging entries. Entries with 0 may be ignored. */
     struct instr_id {
       unsigned bb;
       unsigned short instr;
@@ -113,20 +142,25 @@ bool applyDebugifyMetadata(
                             Instruction *InsertBefore) {
       assert(imap.find(&TemplateInst) != imap.end());
       auto info = imap[&TemplateInst];
+
+      /*  Note, since we don't get a column number here, we are putting the basic block
+          number in the name, and the instruction number in the line number. */
       std::string Name = utostr(info.bb);
+
       Value *V = &TemplateInst;
       if (TemplateInst.getType()->isVoidTy())
         V = ConstantInt::get(Int32Ty, 0);
       const DILocation* loc = TemplateInst.getDebugLoc().get();
+
       auto LocalVar = DIB.createAutoVariable(SP, Name, File,
         info.instr, getCachedDIType(V->getType()), /*AlwaysPreserve=*/true);
       DIB.insertDbgValueIntrinsic(V, LocalVar, DIB.createExpression(), loc,
                                   InsertBefore);
     };
 
+    /*  Build the imap as described above */
     unsigned bbCtr = 1;
     for (BasicBlock &BB : F) {
-      // Attach debug locations.
       unsigned iCtr = 1;
       for (Instruction &I : BB){
         imap[&I] = instr_id(bbCtr, iCtr);
@@ -136,6 +170,10 @@ bool applyDebugifyMetadata(
     }
 
     for (BasicBlock &BB : F) {
+      /*  Insert the location, for doing instruction to IR correlations- described
+          more in the documentation. Note, finding the DILocation::get function
+          is a bit messy, so this is the context, line, column, and parent debug
+          entry- the fucntion's associated DW_TAG_subprogram. */
       for (Instruction &I : BB) {
         instr_id loc_info = imap[&I];
         I.setDebugLoc(DILocation::get(Ctx, myMask<unsigned int>() | (loc_info.bb), 
@@ -173,14 +211,19 @@ bool applyDebugifyMetadata(
       }
     }
 
-    // Add params
+    /*  Handle function formal parameters. Why is arg_ctr repeated twice? The first
+        one is in the LLVM DIBuilder function, for the arg number- but this value
+        is not stored in the DW_TAG_formal_parameter entry (or maybe I did something
+        wrong). But the line number is still available, so I put it there as well. */
     unsigned arg_ctr = 1;
     for(Argument& arg : F.args()){
-      // don't care about line here
       auto dParam = DIB.createParameterVariable(SP, arg.getName(), arg_ctr, File, 
         arg_ctr, getCachedDIType(arg.getType()), true);
       ++arg_ctr;
       
+      /*  LLVM handles debug values by calling an intrinsic recording the value.
+          So we place the intrinsic "calls" as the first IR instructions in the function,
+          but it doesn't really matter */
       Instruction* firstInstr = F.front().getFirstNonPHIOrDbgOrLifetime();
       DIB.insertDbgValueIntrinsic(&arg, dParam, DIB.createExpression(), 
         DILocation::get(F.getParent()->getContext(), 0, 0, SP), firstInstr);

@@ -10,7 +10,8 @@ inc2 = inc/codeinfo
 debug = 1
 
 llvmBinPath = $(LLVM_ROOT)/bin
-CFlags = -Wall -O3 -std=c++11 -g $(shell $(llvmBinPath)/llvm-config --cxxflags)
+# already c++14 by the llvm-config flags
+CFlags = -Wall -O3 -g $(shell $(llvmBinPath)/llvm-config --cxxflags)
 LDFlags = $(shell $(llvmBinPath)/llvm-config --ldflags --libs)
 libs =
 libDir =

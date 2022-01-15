@@ -1,7 +1,7 @@
 #include "ooo_cpu.h"
 #include "set.h"
 
-#include "info_manager.h"
+#include "code_informer.h"
 
 #include <string>
 
@@ -2304,7 +2304,7 @@ void O3_CPU::retire_rob()
         cout << "[ROB] " << __func__ << " instr_id: " << ROB.entry[ROB.head].instr_id << " is retired" << endl; });
 
         // print instr
-        info_manager::get_instance()->update_all(&ROB.entry[ROB.head]);
+        code_informer::get_instance()->handle_retire(&ROB.entry[ROB.head]);
 
         ooo_model_instr empty_entry;
         ROB.entry[ROB.head] = empty_entry;
