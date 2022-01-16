@@ -8,11 +8,13 @@
 #include <tuple>
 
 #include "code_info.h"
-#include "llvm_info.h"
+#include "loop_info.h"
 #include "call_stack.h"
+#include "llvm_info.h"
 
 #define TYPE_EXPAND(V) std::tuple<        \
-  V<call_stack>                           \
+  V<call_stack>,                          \
+  V<loop_info>                            \
 >
 typedef TYPE_EXPAND(std::vector) results_t;
 #define GET_RESULT(results, type) std::get<std::vector<type>>(results)

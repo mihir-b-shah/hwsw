@@ -2,9 +2,11 @@
 #include "cache.h"
 #include "code_informer.h"
 #include "call_stack.h"
+#include "loop_info.h"
 
 #include <unordered_map>
 #include <utility>
+#include <functional>
 
 using namespace std;
 
@@ -13,9 +15,16 @@ using namespace std;
 // training unit (maps pc to last address)
 unordered_map<uint64_t, uint64_t> tu;
 
-// mapping cache (maps address to next address)
-unordered_map<uint64_t, uint64_t> cache;
-unordered_map<uint64_t, uint64_t> context; // instr_ids for cache update
+struct pair_hash {
+  template<typename T1, typename T2>
+  size_t operator()(const pair<T1,T2>& p) const {
+    return std::hash<T1>{}(p.first) ^ std::hash<T2>{}(p.second);
+  }
+};
+
+/* true pc-localization */
+unordered_map<pair<uint64_t, uint64_t>, uint64_t, pair_hash> cache;
+unordered_map<pair<uint64_t, uint64_t>, uint64_t, pair_hash> context;
 
 /* performance metadata */
 unordered_map<uint64_t, uint64_t> outstanding;
@@ -27,8 +36,9 @@ uint64_t divergence = 0;
 
 /* get most specific prediction possible */
 uint64_t get_prediction(uint64_t pc, uint64_t addr) {
-    if (cache.find(addr) != cache.end()) {
-        return cache[addr];
+    auto iter = cache.find(make_pair(pc,addr));
+    if (iter != cache.end()) {
+        return iter->second;
     } else {
         return 0;
     }
@@ -64,21 +74,31 @@ void sisb_prefetcher_operate(uint64_t addr, uint64_t pc, uint8_t cache_hit, uint
     if (tu.find(pc) != tu.end()) {
         uint64_t last_addr = tu[pc];
 
-        bool divergent = cache.find(last_addr) != cache.end() && cache[last_addr] != addr_B;
-        bool convergent = cache.find(last_addr) != cache.end() && cache[last_addr] == addr_B;
+        auto cache_idx = make_pair(pc, last_addr);
+        auto cache_iter = cache.find(cache_idx);
 
-        code_informer<call_stack>::get_instance()->accept_query(instr_id, 
-          {context[last_addr]}, [pc, divergent, convergent](const std::vector<call_stack>& results){
+        bool divergent = cache_iter != cache.end() && cache_iter->second != addr_B;
+        bool convergent = cache_iter != cache.end() && cache_iter->second == addr_B;
+
+        init_iid_t ops = {context[cache_idx]};
+        code_informer::get_instance()->accept_query(instr_id, 
+          ops, [pc, divergent, convergent](const results_t& results){
+            const std::vector<call_stack>& call_stk_res = GET_RESULT(results, call_stack);
+            const std::vector<loop_info>& loop_res = GET_RESULT(results, loop_info);
+
             std::cerr << "EVENT: " << (divergent ? "divrg" : convergent ? "convg" : "fresh")
                       << " PC: " << std::hex << pc << std::dec
-                      << " BEFCTXT: " << results[1]
-                      << " AFTCTXT: " << results[0] << '\n';
+                      << " BEF_CS: " << call_stk_res[1]
+                      << " AFT_CS: " << call_stk_res[0]
+                      << " BEF_LP: " << loop_res[1].loop_depth
+                      << " AFT_LP: " << loop_res[0].loop_depth << '\n';
           });
+
         if (divergent) {
             divergence++;
         }
-        cache[last_addr] = addr_B;
-        context[last_addr] = instr_id;
+        cache[cache_idx] = addr_B;
+        context[cache_idx] = instr_id;
     }
     tu[pc] = addr_B;
 

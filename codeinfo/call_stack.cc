@@ -5,6 +5,10 @@
 #include <llvm/IR/Instructions.h>
 #include <llvm/Support/Casting.h>
 
+#include <string>
+#include <algorithm>
+#include <cassert>
+
 #include "call_stack.h"
 #include "llvm_info.h"
 
@@ -27,21 +31,24 @@ std::ostream& operator<<(std::ostream& os, const call_stack& cs){
   return os;
 }
 
-call_stack_impl::call_stack_impl() 
-  : prev_func(nullptr), prev_call(false), prev_ret(false), valid(false) {}
+static llvm::Function* prev_func = nullptr;
+static bool prev_call = false;
+static bool prev_ret = false;
+static std::vector<llvm::Function*> call_stk;
+static bool valid = false;
 
-llvm::Function* get_func(llvm_info::inst_range* insts){
-  if(insts == nullptr || insts->size() == 0){
+llvm::Function* get_func(llvm_info::inst_range* llvm_instrs){
+  if(llvm_instrs == nullptr || llvm_instrs->size() == 0){
     return nullptr;
   } else {
-    return insts->back()->getFunction();
+    return llvm_instrs->back()->getFunction();
   }
 }
 
 template<typename T>
-bool is_instr_type(llvm_info::inst_range* insts){
-  if(insts == nullptr) return false;
-  for(const llvm::Instruction* instr : *insts){
+bool is_instr_type(llvm_info::inst_range* llvm_instrs){
+  if(llvm_instrs == nullptr) return false;
+  for(const llvm::Instruction* instr : *llvm_instrs){
     if(llvm::isa<T>(instr)) return true;
   }
   return false;
@@ -51,9 +58,11 @@ std::string print_func(llvm::Function* fn){
   return fn != nullptr ? fn->getName().str() : "nilf";
 }
 
-void call_stack_impl::update_state(llvm_info::inst_range* insts, ooo_model_instr* instr){
-  llvm::Function* curr_func = get_func(insts);
-  this->valid = curr_func != nullptr;
+call_stack code_info_impl<call_stack>::update_impl(
+  llvm_info::inst_range* llvm_instrs, ooo_model_instr* instr){
+
+  llvm::Function* curr_func = get_func(llvm_instrs);
+  valid = curr_func != nullptr;
   // std::cerr << std::hex << (instr->ip - llvm_info::get_instance()->vaddr_offset()) << std::dec << " " << print_func(prev_func) << " -> " << print_func(curr_func) << '\n';
   if(prev_func != nullptr && curr_func != nullptr && prev_func != curr_func){
     if(prev_call){
@@ -81,12 +90,12 @@ void call_stack_impl::update_state(llvm_info::inst_range* insts, ooo_model_instr
   */
 
   prev_func = curr_func;
-  prev_call = is_instr_type<llvm::CallInst>(insts);
-  prev_ret = is_instr_type<llvm::ReturnInst>(insts);
+  prev_call = is_instr_type<llvm::CallInst>(llvm_instrs);
+  prev_ret = is_instr_type<llvm::ReturnInst>(llvm_instrs);
 
   /*
-  if(insts != nullptr){
-    std::cerr << insts->back()->getOpcodeName() << " ";
+  if(llvm_instrs != nullptr){
+    std::cerr << llvm_instrs->back()->getOpcodeName() << " ";
   } else {
     std::cerr << "none ";
   }
@@ -96,5 +105,6 @@ void call_stack_impl::update_state(llvm_info::inst_range* insts, ooo_model_instr
   }
   std::cerr << "]\n";
   */
+  return call_stack(valid, call_stk);
 }
   

@@ -2303,7 +2303,8 @@ void O3_CPU::retire_rob()
         DP ( if (warmup_complete[cpu]) {
         cout << "[ROB] " << __func__ << " instr_id: " << ROB.entry[ROB.head].instr_id << " is retired" << endl; });
 
-        // print instr
+        /*  update all code_info objects with this instruction - as explained in documentation,
+            ROB retirement is when this needs to happen. */
         code_informer::get_instance()->handle_retire(&ROB.entry[ROB.head]);
 
         ooo_model_instr empty_entry;
