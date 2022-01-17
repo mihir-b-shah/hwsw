@@ -41,7 +41,6 @@ bool output_file_closed = false;
 bool tracing_on = false;
 
 trace_instr_format_t curr_instr;
-string my_exe_name;
 
 /* ===================================================================== */
 // Command line switches
@@ -369,16 +368,24 @@ VOID Instruction(INS ins, VOID *v)
     INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR)EndInstruction, IARG_END);
 }
 
+static std::string my_img;
+VOID ImageLoad(IMG img, VOID *v)
+{
+    if(IMG_IsMainExecutable(img)){
+        my_img = IMG_Name(img);
+    }
+}
+
 VOID Routine(RTN rtn, VOID *v)
 {
     static bool search = true;
     if(search){
         const string& name = RTN_Name(rtn);
-        if(name == "_init"){
+        if(name == "main"){
             const string& img = IMG_Name(SEC_Img(RTN_Sec(rtn)));
-            const string& img_base = img.substr(1+img.find_last_of('/'));
-            if(img_base == my_exe_name){
+            if(img == my_img){
                 RTN_Open(rtn);
+                cout << name << " " << img << " " << std::hex << INS_Address(RTN_InsHead(rtn)) << std::dec << '\n';
                 cout << "*** MIHIR_ADDR: " << INS_Address(RTN_InsHead(rtn)) << '\n';
                 RTN_Close(rtn);
                 search = false;
@@ -418,8 +425,7 @@ int main(int argc, char *argv[])
     if( PIN_Init(argc,argv) )
         return Usage();
 
-    char* exe_raw = argv[argc-1];
-    my_exe_name = string(exe_raw, strrchr(exe_raw, '/')+1-exe_raw, string::npos);
+    PIN_InitSymbols();
 
     const char* fileName = KnobOutputFile.Value().c_str();
 
@@ -432,6 +438,8 @@ int main(int argc, char *argv[])
 
     // Register function to be called to instrument instructions
     INS_AddInstrumentFunction(Instruction, 0);
+
+    IMG_AddInstrumentFunction(ImageLoad, 0);
 
     RTN_AddInstrumentFunction(Routine, 0);
 

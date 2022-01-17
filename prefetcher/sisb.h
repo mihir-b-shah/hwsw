@@ -1,8 +1,5 @@
 
 #include "cache.h"
-#include "code_informer.h"
-#include "call_stack.h"
-#include "instr_ptr.h"
 
 #include <unordered_map>
 #include <utility>

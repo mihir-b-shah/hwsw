@@ -56,5 +56,5 @@ we aren't inserting duplicate debug line infos, but I hypothesize splitting debu
 info in some lower-level pass might be happening.
 '''
 def process_func_entries(entries):
-  return map(lambda grp : max(grp[1], key=lambda v: v.address),
+  return map(lambda grp : min(grp[1], key=lambda v: v.address),
     itertools.groupby(sorted(entries, key=entry_sorter), key=entry_sorter))

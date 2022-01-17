@@ -35,7 +35,6 @@ uint64_t getAllocSizeInBits(Module &M, Type *Ty) {
     
     A better description here: 
     https://llvm.org/doxygen/GlobalValue_8h_source.html#l00387 */
-
 bool isFunctionSkipped(Function &F) {
   return F.isDeclaration(); // || !F.hasExactDefinition();
 }

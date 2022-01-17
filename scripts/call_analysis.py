@@ -2,6 +2,17 @@
 import re
 import sys
 
+'''
+Probably not very useful, but I thought I would keep it around.
+When we are ONLY printing the call stack feature, in the format
+in pc_mod_sisb.h, we parse it from the results file and do
+basic correlation analysis (i.e. see, on a divergence or convergence
+event, how similar are the feature vectors.
+
+Also allows us to check all subsets- i.e. to see if we consider
+this portion of the call stack, what are the numbers?
+'''
+
 # global vars
 file_inp = re.compile(r'^EVENT:\s(\w+)\sPC:\s[0-9a-f]+\sBEFCTXT:\s\[([^\[\]]*)\]\sAFTCTXT:\s\[([^\[\]]*)\]\s*$')
 fpath = sys.argv[1]

@@ -4,6 +4,7 @@
 
 #include <llvm/IR/Function.h>
 
+#include <array>
 #include <vector>
 #include <cinttypes>
 #include <fstream>
@@ -11,6 +12,12 @@
 #include "code_info.h"
 #include "llvm_info.h"
   
+/*  valid is unset if for example, we are running in library
+    code, or something else, other than user code 
+
+    we limit the size of the call stack feature, otherwise
+    this was causing out-of-memory due to us storing the call
+    stack produced by every instr_id (in code_info base class) */
 struct call_stack {
   static constexpr size_t STK_SIZE = 10;
 

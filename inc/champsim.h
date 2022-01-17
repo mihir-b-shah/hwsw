@@ -116,6 +116,7 @@ class RANDOM {
 };
 extern uint64_t champsim_seed;
 
+/* the basename of the trace, implemented in main.cc */
 std::string& get_trace_name();
 
 #endif

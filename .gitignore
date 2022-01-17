@@ -18,3 +18,5 @@ spec/benchspec/CPU/5*
 infgen/build/
 infgen/files/
 infgen/dwproc/__pycache__/
+
+tracer/obj-intel64/

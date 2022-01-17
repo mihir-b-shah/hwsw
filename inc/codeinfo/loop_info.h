@@ -7,6 +7,11 @@
 #include "code_info.h"
 #include "llvm_info.h"
   
+/*  loop_depth is -1 for invalid info, typically if we're not
+    in user code.
+    right now, this is not very useful information, but if this
+    type of info is useful, a lot more could be added- characteristics
+    of the induction variable, etc. from the LLVM loop class */
 struct loop_info {
   int loop_depth;
 

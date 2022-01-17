@@ -31,6 +31,7 @@ static std::string make_fname(const char* suffix){
   return std::string("info/") + get_trace_name() + suffix;
 }
 
+/*  representing an 'IR'-tagged line from the .crl file. */
 struct correl_info {
   uint32_t bb;
   uint16_t instr;
@@ -64,6 +65,9 @@ parsed_objs* read_dbg_file(){
   auto& frange = ret_obj->frange;
 
   std::regex func_header("^FUNC\\s+([0-9a-f]+)\\s+([0-9a-f]+)\\s+(\\S+)$");
+  /*  Be REALLY careful with the order here. They are in pc, instr, bb order,
+      but the correl_info is in bb, instr, and pc order. (Bad design idea
+      on my part), maybe should change. */
   std::regex ir_entry("^IR\\s+([0-9a-f]+)\\s+(\\d+)\\s+(\\d+)$");
 
   std::string func;
@@ -79,15 +83,22 @@ parsed_objs* read_dbg_file(){
       func = match[3];
       frange[func] = std::make_pair<uint64_t, uint64_t>(
         parse_u64(match[1], 16), parse_u64(match[2], 16));
-    } // else just skip it.
+    } // else just skip it- blank lines, etc.
   }
 
+  /*  for each function, sort so we can iterate using a
+      two-pointers approach in building correlation info. */
   for(auto iter = by_func.begin(); iter != by_func.end(); ++iter){
     std::sort(iter->second.begin(), iter->second.end());
   }
   return ret_obj;
 }
 
+/*  We need a way to iterate the non-X instructions (right now non-debug intrinsics),
+    but that can change. Note, LLVM has a filter_iterator, but it seems very hard to use.
+    Hence, we build our own iterator, on top of LLVM's inst_iterator. In addition, we need
+    to know the NUMBER of the basic block and instruction we are currently in, for
+    correlation with the .crl file. */
 class my_inst_iterator {
 private:
   llvm::Function* f;
@@ -141,14 +152,13 @@ llvm_info::llvm_info(){
   using namespace llvm;
   using namespace llvm_info_impl;
 
-  // get module
-
+  /*  get module */
   const auto ll_fname = make_fname(".ll");
   SMDiagnostic err;
   auto SetDataLayout = [](StringRef) -> Optional<std::string> { return None; };
   this->mod = parseIRFile(ll_fname, err, this->context, SetDataLayout).release();
 
-  // get vaddr offset
+  /*  get vaddr offset */
   const auto va_fname = make_fname(".offset");
   {
     std::cerr << va_fname << '\n';
@@ -158,7 +168,7 @@ llvm_info::llvm_info(){
     addr_offset = static_cast<uint64_t>(stoull(buf, nullptr, 0));
   }
 
-  // get debug info
+  /*  get debug info from .crl file */
   parsed_objs* dbg_objs = read_dbg_file(); 
   auto& fmap = dbg_objs->by_func;
   auto& frange = dbg_objs->frange;
@@ -174,8 +184,10 @@ llvm_info::llvm_info(){
     my_inst_iterator llvm_iter(f);
     int first_correl_pos = -1;
 
-    // guaranteed every llvm instr can correspond to only one dbg element
+    /*  right now, we make the assumption that every llvm instr
+        can correspond to only one dbg element. */
     for(const correl_info& cinfo : entry.second){
+      // std::cerr << cinfo.bb << ' ' << cinfo.instr << ' ' << std::hex << cinfo.pc_start << std::dec << '\n';
       if(first_correl_pos == -1){
         first_correl_pos = static_cast<int>(correl.size());
       }
@@ -183,7 +195,11 @@ llvm_info::llvm_info(){
       bool matches = false;
       do {
         Instruction* ins = llvm_iter.get_instr();
+        //std::cerr << ins->getOpcodeName() << '\n';
 
+        /*  build up the range until our instruction & bb number matches
+            the correl info we are looking at. This means the IR that
+            maps to real machine code should be last. */
         correl.back().first = cinfo.pc_start;
         correl.back().second.push_back(ins);
 
@@ -192,16 +208,16 @@ llvm_info::llvm_info(){
       } while(!llvm_iter.done() && !matches);
     }
 
-    // include the function prologue in the first correlation's range.
+    /*  include the function prologue in the first correlation's range. */
     if(first_correl_pos != -1){
       correl[first_correl_pos].first = this->func_starts[f].first;
     }
   }
 
-  // first dummy
+  /*  create dummies/sentinels, so that binary searches on correl go more smoothly
+      (rather than returning correl.end()) */
   correl.emplace_back();
   correl.back().first = 0x0;
-  // last dummy
   correl.emplace_back();
   correl.back().first = 0x200000000000ULL;
 
@@ -213,22 +229,24 @@ llvm_info::inst_range* llvm_info::get_llvm_instrs(uint64_t pc){
   uint64_t real_addr = pc-addr_offset;
   info.first = real_addr;
 
+  /*  upper_bound-1 gives us the exact point we want, since we are guaranteed getting
+      the function that starts at an address less than or equal to our pc. */
   auto iter = std::upper_bound(correl.begin(), correl.end(), info,
     [](const map_info& prior, const map_info& info){ return prior.first < info.first; });
   --iter;
 
   if(iter->second.size() == 0){
-    // invalid.
     return nullptr;
   } else {
     auto instr = iter->second.back();
     auto& addr_range = this->func_starts[instr->getFunction()];
+    /*  if we end up, somehow, outside the range of a function, but are still after
+        a .crl location, possibly as the last .crl location of the past function, 
+        this catches us. */
     if(addr_range.first <= real_addr && real_addr <= addr_range.second){
-      // valid
       return &(iter->second);
     } else {
       return nullptr;
-      // invalid
     }
   }
 }

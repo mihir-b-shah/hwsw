@@ -27,6 +27,7 @@ queue <uint64_t > page_queue;
 map <uint64_t, uint64_t> page_table, inverse_table, recent_page, unique_cl[NUM_CPUS];
 uint64_t previous_ppage, num_adjacent_page, num_cl[NUM_CPUS], allocated_pages, num_page[NUM_CPUS], minor_fault[NUM_CPUS], major_fault[NUM_CPUS];
 
+/* extract from the trace path (e.g. /a/b/perlbench.gz -> perlbench) */
 static std::string trace_name_;
 std::string& get_trace_name(){
   return trace_name_;
